@@ -1,30 +1,241 @@
 // Variable global para productos cargados de forma asíncrona
 let productsData = []; 
 
-document.addEventListener("DOMContentLoaded", function () {
-    // 1. Cargar productos de forma asíncrona
-    fetch('../productos.json')
-        .then(response => {
-            if (!response.ok) {
-                // Mensaje de error amigable para el usuario, si falla la carga.
-                throw new Error('No se pudo cargar productos.json. Asegúrate de usar un servidor local.');
-            }
-            return response.json();
-        })
-        .then(products => {
-            productsData = products; // Almacenar los productos cargados
-            initializePageLogic();
-        })
-        .catch(error => {
-            console.error(error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error de Carga',
-                text: 'No se pudo cargar el catálogo de productos. Si estás en local, utiliza Live Server o un servidor web.',
-                confirmButtonText: 'Aceptar'
-            });
+// --- FUNCIONES AUXILIARES DE UTILIDAD (Definidas primero para evitar errores de referencia) ---
+
+function saveClientData() {
+    // Guarda los datos del cliente en localStorage
+    localStorage.setItem("nombre", document.getElementById("nombre").value);
+    localStorage.setItem("apellido", document.getElementById("apellido").value);
+    localStorage.setItem("telefono", document.getElementById("telefono").value);
+}
+
+function loadClientData() {
+    // Carga los datos del cliente desde localStorage al formulario
+    const nombreInput = document.getElementById("nombre");
+    const apellidoInput = document.getElementById("apellido");
+    const telefonoInput = document.getElementById("telefono");
+
+    if (nombreInput && localStorage.getItem("nombre")) {
+        nombreInput.value = localStorage.getItem("nombre");
+    }
+    if (apellidoInput && localStorage.getItem("apellido")) {
+        apellidoInput.value = localStorage.getItem("apellido");
+    }
+    if (telefonoInput && localStorage.getItem("telefono")) {
+        telefonoInput.value = localStorage.getItem("telefono");
+    }
+}
+
+function eliminarCarritoSiExpirado() {
+    const carrito = JSON.parse(localStorage.getItem("cart")) || [];
+    const horaCreacionCarrito = localStorage.getItem("horaCreacionCarrito");
+
+    if (carrito.length > 0 && horaCreacionCarrito) {
+        const horaActual = new Date().getTime();
+        const tiempoTranscurrido = horaActual - parseInt(horaCreacionCarrito, 10);
+
+        if (tiempoTranscurrido > 3 * 60 * 60 * 1000) { // 3 horas
+            localStorage.removeItem("cart");
+            localStorage.removeItem("horaCreacionCarrito");
+        }
+    } else if (carrito.length > 0 && !horaCreacionCarrito) {
+        localStorage.setItem("horaCreacionCarrito", new Date().getTime().toString());
+    }
+}
+
+function getMinPickupDate() {
+    const offsetBuenosAires = -180; // UTC-3 en minutos
+    const fechaActual = new Date();
+    // Ajustar la fecha actual a la zona horaria simulada (UTC-3)
+    const fechaBuenosAires = new Date(fechaActual.getTime() + (offsetBuenosAires * 60 * 1000) + (fechaActual.getTimezoneOffset() * 60000));
+    return new Date(fechaBuenosAires.getTime() + 48 * 60 * 60 * 1000); 
+}
+
+function mostrarResumenPedido() {
+    const cart = JSON.parse(localStorage.getItem("cart")) || [];
+    const orderSummary = document.getElementById("order-summary");
+    const orderSummaryMobile = document.getElementById("order-summary-mobile");
+    const totalPedidoMobile = document.getElementById("total-pedido-mobile");
+    const totalPedidoPanel = document.getElementById("total-pedido-panel");
+    const totalPrice = document.getElementById("total-price");
+
+    if (!orderSummary || !orderSummaryMobile || !totalPedidoMobile || !totalPedidoPanel || !totalPrice || productsData.length === 0) {
+        return;
+    }
+
+    orderSummary.innerHTML = "";
+    orderSummaryMobile.innerHTML = "";
+    let total = 0;
+
+    if (cart.length === 0) {
+        orderSummary.innerHTML = "<li>No hay productos en el carrito.</li>";
+        orderSummaryMobile.innerHTML = "<li>No hay productos en el carrito.</li>";
+    } else {
+        cart.forEach(item => {
+            const product = productsData.find(p => p.name === item.title);
+
+            // Código para construir el list item (Escritorio y Móvil)
+            const baseItem = (isMobile) => {
+                const li = document.createElement("li");
+                li.className = "list-group-item";
+                if (product && product.images && product.images.length > 0) {
+                    const img = document.createElement("img");
+                    img.src = product.images[0];
+                    img.alt = item.title;
+                    img.style.width = isMobile ? "80px" : "100px";
+                    img.style.height = "auto";
+                    img.style.marginRight = "10px";
+                    li.appendChild(img);
+                }
+                let itemText = `${item.title} - `;
+                if (item.sliceCount > 0) {
+                    itemText += `${item.sliceCount} porción(es) ($${item.sliceTotal}) `;
+                }
+                if (item.cakeCount > 0) {
+                    itemText += `${item.cakeCount} torta(s) entera(s) ($${item.cakeTotal})`;
+                }
+                li.appendChild(document.createTextNode(itemText));
+                return li;
+            };
+
+            orderSummary.appendChild(baseItem(false));
+            orderSummaryMobile.appendChild(baseItem(true));
+
+            total += item.sliceTotal + item.cakeTotal;
         });
-});
+    }
+
+    totalPedidoMobile.textContent = total;
+    totalPedidoPanel.textContent = total;
+    totalPrice.textContent = total;
+}
+
+function validarRetiro() {
+    const paymentForm = document.getElementById("payment-form");
+    const fechaRetiroInput = document.getElementById("fecha-retiro");
+    const horaRetiroInput = document.getElementById("hora-retiro"); 
+    const submitButton = paymentForm ? paymentForm.querySelector('button[type="submit"]') : null;
+
+    if (!submitButton) return false;
+
+    const sucursalSeleccionada = document.querySelector('input[name="pickup"]:checked');
+    const fechaSeleccionadaStr = fechaRetiroInput.value;
+    const horaSeleccionadaStr = horaRetiroInput.value;
+    const fechaMinima = getMinPickupDate();
+
+    // 0. Validación de campos obligatorios
+    if (!sucursalSeleccionada || !fechaSeleccionadaStr || !horaSeleccionadaStr) {
+        submitButton.disabled = true;
+        return false;
+    }
+
+    const isTakeAway = sucursalSeleccionada.value === "sucursal1";
+    const ABRIR = 8;
+    const CERRAR = isTakeAway ? 20 : 21; 
+    const HORARIO_TEXTO = isTakeAway ? 'Lunes a Sábado de 8:00 a 20:00 hs.' : 'Lunes a Domingo de 8:00 a 21:00 hs.';
+
+    // --- 1. VALIDACIÓN DE HORARIO ACTUAL (¿El local está abierto AHORA para recibir el pedido?) ---
+    const offsetBuenosAires = -180;
+    const now = new Date();
+    // Hora actual en UTC-3
+    const nowUTC3 = new Date(now.getTime() + (offsetBuenosAires * 60 * 1000) + (now.getTimezoneOffset() * 60000)); 
+    const currentDay = nowUTC3.getDay(); 
+    const currentHour = nowUTC3.getHours();
+    const currentMinute = nowUTC3.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+    const closingTimeInMinutes = CERRAR * 60;
+    const openingTimeInMinutes = ABRIR * 60;
+    
+    // a) Take Away cerrado los domingos (current day check)
+    if (isTakeAway && currentDay === 0) {
+         Swal.fire({ 
+            title: '¡Local Cerrado! 🚫',
+            text: `La sucursal Take Away está cerrada hoy (Domingo). No podemos procesar pedidos ahora. Nuestro horario es: ${HORARIO_TEXTO}`, 
+            icon: "error", buttonsStyling: false, 
+            confirmButtonText: "Aceptar", 
+            customClass: { confirmButton: "btn btn-primary" } 
+        });
+        submitButton.disabled = true;
+        return false;
+    }
+
+    // b) Hora actual fuera del rango (preciso al minuto)
+    if (currentTimeInMinutes < openingTimeInMinutes || currentTimeInMinutes > closingTimeInMinutes) {
+        Swal.fire({ 
+            title: '¡Local Cerrado! 😔',
+            text: `No podemos recibir tu pedido ahora. La sucursal ${isTakeAway ? 'Take Away' : 'The Gula House'} está fuera del horario de atención. Nuestro horario es: ${HORARIO_TEXTO}`, 
+            icon: "error", buttonsStyling: false, 
+            confirmButtonText: "Aceptar", 
+            customClass: { confirmButton: "btn btn-primary" } 
+        });
+        submitButton.disabled = true;
+        return false;
+    }
+    
+    // --- 2. VALIDACIÓN DE FECHA Y HORA DE RETIRO (Reglas de negocio 48h y horario de sucursal) ---
+
+    // Crear objeto Date de la hora de retiro seleccionada (UTC-3)
+    const fechaHoraSeleccionada = new Date(`${fechaSeleccionadaStr}T${horaSeleccionadaStr}:00-03:00`); 
+    const diaSemanaRetiro = fechaHoraSeleccionada.getDay(); // 0 = domingo, 1 = lunes
+    const horaRetiro = fechaHoraSeleccionada.getHours();
+    const minutosRetiro = fechaHoraSeleccionada.getMinutes();
+    const retiroTimeInMinutes = horaRetiro * 60 + minutosRetiro;
+
+    // a) Validación de 48 horas de anticipación
+    const fechaMinimaConfirmacion = new Date(fechaMinima.getTime());
+    if (fechaHoraSeleccionada.getTime() < fechaMinimaConfirmacion.getTime()) {
+        Swal.fire({ 
+            text: "🚫 Debes seleccionar una fecha y hora con al menos 48 horas de anticipación.", 
+            icon: "warning", buttonsStyling: false, 
+            confirmButtonText: "Aceptar", 
+            customClass: { confirmButton: "btn btn-primary" } 
+        });
+        submitButton.disabled = true;
+        return false;
+    }
+
+    // b) Validación de DÍA de Retiro (solo para Take Away)
+    if (isTakeAway && diaSemanaRetiro === 0) { // Domingo
+        Swal.fire({ 
+            text: "🚫 La sucursal Take Away no permite retiros los domingos.", 
+            icon: "warning", buttonsStyling: false, 
+            confirmButtonText: "Aceptar", 
+            customClass: { confirmButton: "btn btn-primary" } 
+        });
+        submitButton.disabled = true;
+        return false;
+    }
+
+    // c) Validación de HORARIO de Retiro (Precisa al minuto)
+    if (retiroTimeInMinutes < openingTimeInMinutes) {
+        Swal.fire({ 
+            text: `🚫 La hora seleccionada (${horaSeleccionadaStr}) es antes de la apertura. ${isTakeAway ? 'Take Away' : 'The Gula House'} abre a las ${ABRIR}:00 hs.`, 
+            icon: "warning", buttonsStyling: false, 
+            confirmButtonText: "Aceptar", 
+            customClass: { confirmButton: "btn btn-primary" } 
+        });
+        submitButton.disabled = true;
+        return false;
+    }
+
+    if (retiroTimeInMinutes > closingTimeInMinutes) {
+         Swal.fire({ 
+            text: `🚫 La hora seleccionada (${horaSeleccionadaStr}) es posterior al cierre. ${isTakeAway ? 'Take Away' : 'The Gula House'} cierra a las ${CERRAR}:00 hs.`, 
+            icon: "warning", buttonsStyling: false, 
+            confirmButtonText: "Aceptar", 
+            customClass: { confirmButton: "btn btn-primary" } 
+        });
+        submitButton.disabled = true;
+        return false;
+    }
+    
+    // Si TODAS las validaciones (actuales y futuras) pasan
+    submitButton.disabled = false;
+    return true;
+}
+
+// --- LÓGICA PRINCIPAL ---
 
 function initializePageLogic() {
     const paymentForm = document.getElementById("payment-form");
@@ -38,37 +249,32 @@ function initializePageLogic() {
         return;
     }
     
-    // Funciones de Persistencia y Resumen
+    // 1. Ejecutar funciones auxiliares
     loadClientData();
     eliminarCarritoSiExpirado();
     mostrarResumenPedido();
     
-    // --- Lógica de la Fecha Mínima (48hs a partir de ahora en UTC-3) ---
-    const offsetBuenosAires = -180; // UTC-3 en minutos
-    const fechaActual = new Date();
-    // Ajustar la fecha actual a la zona horaria simulada (Buenos Aires/Córdoba)
-    const fechaBuenosAires = new Date(fechaActual.getTime() + (offsetBuenosAires * 60 * 1000) + (fechaActual.getTimezoneOffset() * 60000));
-    const fechaMinima = new Date(fechaBuenosAires.getTime() + 48 * 60 * 60 * 1000); 
-    
-    // Establecer el mínimo del input date.
+    // 2. Establecer el mínimo del input date.
+    const fechaMinima = getMinPickupDate();
     fechaRetiroInput.min = fechaMinima.toISOString().split("T")[0];
 
-    // Event listeners para re-validar con cada cambio
+    // 3. Event listeners para re-validar con cada cambio
     fechaRetiroInput.addEventListener("change", validarRetiro);
     horaRetiroInput.addEventListener("change", validarRetiro);
     sucursal1Radio.addEventListener("change", validarRetiro);
     sucursal2Radio.addEventListener("change", validarRetiro);
     
-    // Validar al inicio para desactivar el botón si es necesario
+    // 4. Validar al inicio para desactivar el botón si es necesario
     validarRetiro(); 
     
+    // 5. Listener para el envío del formulario
     paymentForm.addEventListener("submit", function (event) {
         event.preventDefault();
 
         if (validarRetiro()) {
             saveClientData();
             
-            // Obtener los datos del formulario
+            // Lógica de creación del mensaje de WhatsApp y redirección...
             const nombre = document.getElementById("nombre").value;
             const apellido = document.getElementById("apellido").value;
             const telefono = document.getElementById("telefono").value;
@@ -80,7 +286,6 @@ function initializePageLogic() {
             const horaRetiro = horaRetiroInput.value;
             let cart = JSON.parse(localStorage.getItem("cart")) || [];
 
-            // Construir el mensaje de WhatsApp
             let total = 0;
             let mensaje = `¡Nuevo pedido!%0A%0A`;
             mensaje += `*Nombre:* ${nombre} ${apellido}%0A`;
@@ -120,120 +325,67 @@ function initializePageLogic() {
             });
         }
     });
-
-    // --- FUNCIÓN DE VALIDACIÓN COMPLETA Y PRECISA ---
-    function validarRetiro() {
-        submitButton.disabled = true;
-
-        const sucursalSeleccionada = document.querySelector('input[name="pickup"]:checked');
-        const fechaSeleccionadaStr = fechaRetiroInput.value;
-        const horaSeleccionadaStr = horaRetiroInput.value;
-
-        // 0. Validación de campos obligatorios
-        if (!sucursalSeleccionada || !fechaSeleccionadaStr || !horaSeleccionadaStr) {
-            return false;
-        }
-
-        const isTakeAway = sucursalSeleccionada.value === "sucursal1";
-        const ABRIR = 8;
-        const CERRAR = isTakeAway ? 20 : 21; // Take Away cierra a las 20, Gula House a las 21
-        const HORARIO_TEXTO = isTakeAway ? 'Lunes a Sábado de 8:00 a 20:00 hs.' : 'Lunes a Domingo de 8:00 a 21:00 hs.';
-
-        // 1. VALIDACIÓN DE HORARIO ACTUAL (¡Tu Requisito: ¿Está abierto ahora?)
-        const offsetBuenosAires = -180; // UTC-3 en minutos
-        const now = new Date();
-        const nowUTC3 = new Date(now.getTime() + (offsetBuenosAires * 60 * 1000) + (now.getTimezoneOffset() * 60000));
-        const currentDay = nowUTC3.getDay(); // 0 (Dom) - 6 (Sáb)
-        const currentHour = nowUTC3.getHours();
-        const currentMinute = nowUTC3.getMinutes();
-        const currentTimeInMinutes = currentHour * 60 + currentMinute;
-        const closingTimeInMinutes = CERRAR * 60;
-        const openingTimeInMinutes = ABRIR * 60;
-        
-        // Take Away está cerrado los domingos (current day check)
-        if (isTakeAway && currentDay === 0) {
-             Swal.fire({ 
-                title: '¡Local Cerrado! 🚫',
-                text: `La sucursal Take Away está cerrada hoy (Domingo). Nuestro horario es: ${HORARIO_TEXTO}`, 
-                icon: "error", buttonsStyling: false, 
-                confirmButtonText: "Aceptar", 
-                customClass: { confirmButton: "btn btn-primary" } 
-            });
-            return false;
-        }
-
-        // Si la hora actual es antes de la apertura o después del cierre (¡Preciso al minuto!)
-        if (currentTimeInMinutes < openingTimeInMinutes || currentTimeInMinutes > closingTimeInMinutes) {
-            Swal.fire({ 
-                title: '¡Local Cerrado! 😔',
-                text: `No podemos recibir tu pedido ahora. La sucursal ${isTakeAway ? 'Take Away' : 'The Gula House'} está fuera del horario de atención. Nuestro horario es: ${HORARIO_TEXTO}`, 
-                icon: "error", buttonsStyling: false, 
-                confirmButtonText: "Aceptar", 
-                customClass: { confirmButton: "btn btn-primary" } 
-            });
-            return false;
-        }
-        
-        // --- Validación de la Fecha y Hora de Retiro (Regla de 48h) ---
-
-        // Crear objeto Date de la hora de retiro seleccionada (UTC-3)
-        const fechaHoraSeleccionada = new Date(`${fechaSeleccionadaStr}T${horaSeleccionadaStr}:00-03:00`); 
-        const diaSemanaRetiro = fechaHoraSeleccionada.getDay(); // 0 = domingo, 1 = lunes
-        const horaRetiro = fechaHoraSeleccionada.getHours();
-        const minutosRetiro = fechaHoraSeleccionada.getMinutes();
-        const retiroTimeInMinutes = horaRetiro * 60 + minutosRetiro;
-
-        // 2. Validación de 48 horas de anticipación
-        const fechaMinimaConfirmacion = new Date(fechaMinima.getTime());
-        if (fechaHoraSeleccionada.getTime() < fechaMinimaConfirmacion.getTime()) {
-            Swal.fire({ 
-                text: "🚫 Debes seleccionar una fecha y hora con al menos 48 horas de anticipación.", 
-                icon: "warning", buttonsStyling: false, 
-                confirmButtonText: "Aceptar", 
-                customClass: { confirmButton: "btn btn-primary" } 
-            });
-            return false;
-        }
-
-        // 3. Validación de DÍA de Retiro (solo para Take Away)
-        if (isTakeAway && diaSemanaRetiro === 0) { // Domingo
-            Swal.fire({ 
-                text: "🚫 La sucursal Take Away no permite retiros los domingos.", 
-                icon: "warning", buttonsStyling: false, 
-                confirmButtonText: "Aceptar", 
-                customClass: { confirmButton: "btn btn-primary" } 
-            });
-            return false;
-        }
-
-        // 4. Validación de HORARIO de Retiro (Precisa al minuto)
-        
-        // Check si es antes de la apertura (8:00 hs)
-        if (retiroTimeInMinutes < openingTimeInMinutes) {
-            Swal.fire({ 
-                text: `🚫 La hora seleccionada (${horaSeleccionadaStr}) es antes de la apertura. ${isTakeAway ? 'Take Away' : 'The Gula House'} abre a las ${ABRIR}:00 hs.`, 
-                icon: "warning", buttonsStyling: false, 
-                confirmButtonText: "Aceptar", 
-                customClass: { confirmButton: "btn btn-primary" } 
-            });
-            return false;
-        }
-
-        // Check si es después del cierre (20:00:00 hs o 21:00:00 hs - el minuto 01 ya no vale)
-        if (retiroTimeInMinutes > closingTimeInMinutes) {
-            Swal.fire({ 
-                text: `🚫 La hora seleccionada (${horaSeleccionadaStr}) es posterior al cierre. ${isTakeAway ? 'Take Away' : 'The Gula House'} cierra a las ${CERRAR}:00 hs.`, 
-                icon: "warning", buttonsStyling: false, 
-                confirmButtonText: "Aceptar", 
-                customClass: { confirmButton: "btn btn-primary" } 
-            });
-            return false;
-        }
-        
-        // Si TODAS las validaciones (actuales y futuras) pasan, habilitar el botón
-        submitButton.disabled = false;
-        return true;
-    }
 }
 
-//
+
+// Lógica de toggle para móvil
+document.addEventListener("DOMContentLoaded", function () {
+    const toggleOrderSummaryButton = document.getElementById("toggle-order-summary");
+    const orderSummaryPanel = document.getElementById("order-summary-panel");
+
+    if (!toggleOrderSummaryButton || !orderSummaryPanel) {
+        return;
+    }
+
+    orderSummaryPanel.classList.remove("active");
+    orderSummaryPanel.style.display = "none";
+
+    toggleOrderSummaryButton.addEventListener("click", function () {
+        if (orderSummaryPanel.classList.contains("active")) {
+            orderSummaryPanel.classList.remove("active");
+            orderSummaryPanel.style.display = "none";
+        } else {
+            orderSummaryPanel.classList.add("active");
+            orderSummaryPanel.style.display = "block";
+            mostrarResumenPedido();
+        }
+    });
+
+    function checkScreenSize() {
+        if (window.innerWidth <= 767) {
+            toggleOrderSummaryButton.style.display = "block";
+        } else {
+            toggleOrderSummaryButton.style.display = "none";
+        }
+    }
+    checkScreenSize();
+    window.addEventListener("resize", checkScreenSize);
+});
+
+// --- PUNTO DE ENTRADA (Mantiene la carga asíncrona) ---
+
+document.addEventListener("DOMContentLoaded", function () {
+    // 1. Cargar productos de forma asíncrona
+    fetch('../productos.json')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('No se pudo cargar productos.json. Asegúrate de usar un servidor local.');
+            }
+            return response.json();
+        })
+        .then(products => {
+            productsData = products; // Almacenar los productos cargados
+            initializePageLogic(); // Llamar a la lógica principal AHORA que todo está definido
+        })
+        .catch(error => {
+            console.error(error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Carga',
+                text: 'No se pudo cargar el catálogo de productos. Si estás en local, utiliza Live Server o un servidor web.',
+                confirmButtonText: 'Aceptar'
+            });
+        });
+});
+
+window.mostrarResumenPedido = mostrarResumenPedido;
