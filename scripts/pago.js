@@ -1,7 +1,7 @@
 // Variable global para productos cargados de forma asíncrona
 let productsData = []; 
 
-// --- FUNCIONES AUXILIARES DE UTILIDAD (Definidas primero para evitar errores de referencia) ---
+// --- I. FUNCIONES AUXILIARES DE UTILIDAD (Deben ir primero) ---
 
 function saveClientData() {
     // Guarda los datos del cliente en localStorage
@@ -132,11 +132,11 @@ function validarRetiro() {
 
     const isTakeAway = sucursalSeleccionada.value === "sucursal1";
     const ABRIR = 8;
-    const CERRAR = isTakeAway ? 20 : 21; 
+    const CERRAR = isTakeAway ? 20 : 21; // Take Away cierra a las 20, Gula House a las 21
     const HORARIO_TEXTO = isTakeAway ? 'Lunes a Sábado de 8:00 a 20:00 hs.' : 'Lunes a Domingo de 8:00 a 21:00 hs.';
 
     // --- 1. VALIDACIÓN DE HORARIO ACTUAL (¿El local está abierto AHORA para recibir el pedido?) ---
-    const offsetBuenosAires = -180;
+    const offsetBuenosAires = -180; // UTC-3 en minutos
     const now = new Date();
     // Hora actual en UTC-3
     const nowUTC3 = new Date(now.getTime() + (offsetBuenosAires * 60 * 1000) + (now.getTimezoneOffset() * 60000)); 
@@ -235,7 +235,7 @@ function validarRetiro() {
     return true;
 }
 
-// --- LÓGICA PRINCIPAL ---
+// --- II. LÓGICA PRINCIPAL (Define la función que orquesta todo) ---
 
 function initializePageLogic() {
     const paymentForm = document.getElementById("payment-form");
@@ -327,7 +327,6 @@ function initializePageLogic() {
     });
 }
 
-
 // Lógica de toggle para móvil
 document.addEventListener("DOMContentLoaded", function () {
     const toggleOrderSummaryButton = document.getElementById("toggle-order-summary");
@@ -362,7 +361,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.addEventListener("resize", checkScreenSize);
 });
 
-// --- PUNTO DE ENTRADA (Mantiene la carga asíncrona) ---
+// --- III. PUNTO DE ENTRADA DE LA APLICACIÓN (Llamada asíncrona) ---
 
 document.addEventListener("DOMContentLoaded", function () {
     // 1. Cargar productos de forma asíncrona
