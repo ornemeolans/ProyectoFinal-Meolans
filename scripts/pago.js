@@ -1,21 +1,26 @@
-let productsData = []; // Variable global para productos
+// Variable global para productos cargados de forma asíncrona
+let productsData = []; 
 
 document.addEventListener("DOMContentLoaded", function () {
     // 1. Cargar productos de forma asíncrona
     fetch('../productos.json')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                // Mensaje de error amigable para el usuario, si falla la carga.
+                throw new Error('No se pudo cargar productos.json. Asegúrate de usar un servidor local.');
+            }
+            return response.json();
+        })
         .then(products => {
-            productsData = products;
-            
-            // 2. Ejecutar la lógica de la página
+            productsData = products; // Almacenar los productos cargados
             initializePageLogic();
         })
         .catch(error => {
-            console.error('Error al cargar productos:', error);
+            console.error(error);
             Swal.fire({
                 icon: 'error',
                 title: 'Error de Carga',
-                text: 'No se pudo cargar el catálogo. Por favor, recarga la página.',
+                text: 'No se pudo cargar el catálogo de productos. Si estás en local, utiliza Live Server o un servidor web.',
                 confirmButtonText: 'Aceptar'
             });
         });
@@ -24,43 +29,44 @@ document.addEventListener("DOMContentLoaded", function () {
 function initializePageLogic() {
     const paymentForm = document.getElementById("payment-form");
     const fechaRetiroInput = document.getElementById("fecha-retiro");
-    const horaRetiroInput = document.getElementById("hora-retiro");
+    const horaRetiroInput = document.getElementById("hora-retiro"); 
     const sucursal1Radio = document.getElementById("sucursal1");
     const sucursal2Radio = document.getElementById("sucursal2");
-    const submitButton = paymentForm.querySelector('button[type="submit"]');
+    const submitButton = paymentForm ? paymentForm.querySelector('button[type="submit"]') : null;
 
     if (!paymentForm || !fechaRetiroInput || !horaRetiroInput || !sucursal1Radio || !sucursal2Radio || !submitButton) {
+        // Asegurar que todos los elementos existan.
         return;
     }
     
-    // Funciones de utilidad para Persistencia y Resumen
+    // Funciones de Persistencia y Resumen
     loadClientData();
     eliminarCarritoSiExpirado();
     mostrarResumenPedido();
     
-    // Configurar la fecha mínima de retiro (48hs a partir de ahora en Buenos Aires)
+    // --- Lógica de la Fecha Mínima (48hs a partir de ahora en UTC-3) ---
     const offsetBuenosAires = -180; // UTC-3 en minutos
     const fechaActual = new Date();
     // Ajustar la fecha actual a la zona horaria simulada (Buenos Aires)
-    const fechaBuenosAires = new Date(fechaActual.getTime() + (offsetBuenosAires + fechaActual.getTimezoneOffset()) * 60000);
+    const fechaBuenosAires = new Date(fechaActual.getTime() + (offsetBuenosAires * 60 * 1000) + (fechaActual.getTimezoneOffset() * 60000));
     const fechaMinima = new Date(fechaBuenosAires.getTime() + 48 * 60 * 60 * 1000); 
-    // Establecer el mínimo del input date en UTC (solo la fecha)
+    
+    // Establecer el mínimo del input date.
     fechaRetiroInput.min = fechaMinima.toISOString().split("T")[0];
 
-    // Event listeners para validación
+    // Event listeners para re-validar con cada cambio
     fechaRetiroInput.addEventListener("change", validarRetiro);
     horaRetiroInput.addEventListener("change", validarRetiro);
     sucursal1Radio.addEventListener("change", validarRetiro);
     sucursal2Radio.addEventListener("change", validarRetiro);
     
-    // Validar al inicio
+    // Validar al inicio para desactivar el botón si es necesario
     validarRetiro(); 
     
     paymentForm.addEventListener("submit", function (event) {
         event.preventDefault();
 
         if (validarRetiro()) {
-            // Guardar datos del cliente para la próxima visita
             saveClientData();
             
             // Obtener los datos del formulario
@@ -76,6 +82,7 @@ function initializePageLogic() {
             let cart = JSON.parse(localStorage.getItem("cart")) || [];
 
             // Construir el mensaje de WhatsApp
+            let total = 0;
             let mensaje = `¡Nuevo pedido!%0A%0A`;
             mensaje += `*Nombre:* ${nombre} ${apellido}%0A`;
             mensaje += `*Teléfono:* ${telefono}%0A`;
@@ -84,7 +91,6 @@ function initializePageLogic() {
             mensaje += `*Fecha y Hora de Retiro:* ${fechaRetiro} ${horaRetiro}%0A%0A`;
             mensaje += `*Detalles del pedido:*%0A`;
 
-            let total = 0;
             cart.forEach(item => {
                 if (item.sliceCount > 0) {
                     mensaje += `- ${item.title}: ${item.sliceCount} porción(es) ($${item.sliceTotal})%0A`;
@@ -97,14 +103,11 @@ function initializePageLogic() {
 
             mensaje += `%0A*Total:* $${total}`;
 
-            // Determinar el número de WhatsApp según la sucursal
             const numeroWhatsApp = sucursal === "sucursal1" ? "3517326453" : "3516431879";
 
-            // Abrir WhatsApp con el mensaje predefinido
             const urlWhatsApp = `https://wa.me/${numeroWhatsApp}?text=${mensaje}`;
             window.open(urlWhatsApp, "_blank");
 
-            // Mostrar la alerta de confirmación
             Swal.fire({
                 text: "¡Compra confirmada! Serás redirigido a WhatsApp para finalizar.",
                 icon: "success",
@@ -112,7 +115,6 @@ function initializePageLogic() {
                 confirmButtonText: "Aceptar",
                 customClass: { confirmButton: "btn btn-primary" }
             }).then(() => {
-                // Limpiar el carrito y redirigir al usuario
                 localStorage.removeItem("cart");
                 localStorage.removeItem("horaCreacionCarrito");
                 window.location.href = "../index.html";
@@ -120,78 +122,96 @@ function initializePageLogic() {
         }
     });
 
+    // --- FUNCIÓN DE VALIDACIÓN COMPLETA ---
     function validarRetiro() {
-        // Deshabilitar el botón por defecto
         submitButton.disabled = true;
 
         const fechaSeleccionadaStr = fechaRetiroInput.value;
         const horaSeleccionadaStr = horaRetiroInput.value;
         
+        // 0. Validación de campos obligatorios
         if (!fechaSeleccionadaStr || !horaSeleccionadaStr) {
             return false;
         }
 
+        // Crear objeto Date con la fecha y hora seleccionadas y la zona horaria UTC-3 (Buenos Aires)
+        // Esto permite comparar el momento exacto de retiro
         const fechaHoraSeleccionada = new Date(`${fechaSeleccionadaStr}T${horaSeleccionadaStr}:00-03:00`); 
         const diaSemana = fechaHoraSeleccionada.getDay(); // 0 = domingo, 1 = lunes
-
-        // --- Configuración de Horarios y Fechas ---
-        const ABRIR_TAKE_AWAY = 8; // 8:00 hs
-        const CERRAR_TAKE_AWAY = 20; // 20:00 hs
-        const ABRIR_GULA = 8; // 8:00 hs
-        const CERRAR_GULA = 21; // 21:00 hs
-        
-        const offsetBuenosAires = -180; // UTC-3 en minutos
-        const fechaActual = new Date();
-        const fechaBuenosAires = new Date(fechaActual.getTime() + (offsetBuenosAires + fechaActual.getTimezoneOffset()) * 60000);
-        const fechaMinima = new Date(fechaBuenosAires.getTime() + 48 * 60 * 60 * 1000);
-
-        // --- Validación de Sucursal y Horarios ---
         const hora = fechaHoraSeleccionada.getHours();
-        const horaMinimaRetiro = fechaMinima.getHours();
-        const fechaMinimaStr = fechaMinima.toISOString().split("T")[0];
-        const fechaSeleccionadaSoloFechaStr = fechaSeleccionadaStr;
         
+        // Parámetros de Horarios de Atención
+        const ABRIR_TAKE_AWAY = 8;
+        const CERRAR_TAKE_AWAY = 20; 
+        const ABRIR_GULA = 8; 
+        const CERRAR_GULA = 21; 
+        
+        // Definir 48 horas de anticipación
+        const fechaMinimaConfirmacion = new Date(fechaMinima.getTime());
+
+        // 1. Validación de 48 horas de anticipación
+        if (fechaHoraSeleccionada.getTime() < fechaMinimaConfirmacion.getTime()) {
+            Swal.fire({ 
+                text: "🚫 Debes seleccionar una fecha y hora con al menos 48 horas de anticipación.", 
+                icon: "warning", buttonsStyling: false, 
+                confirmButtonText: "Aceptar", 
+                customClass: { confirmButton: "btn btn-primary" } 
+            });
+            return false;
+        }
+
         const isTakeAway = sucursal1Radio.checked;
 
-        // 1. Validar Día y Horario por Sucursal
+        // 2. Validación de DÍA y HORARIO por Sucursal
         if (isTakeAway) {
             // Take Away: Lunes a Sábado (1-6), 8:00 a 20:00
             if (diaSemana === 0) { // Domingo
-                Swal.fire({ text: "🚫 Los domingos la sucursal Take Away se encuentra cerrada. Selecciona The Gula House.", icon: "warning", buttonsStyling: false, confirmButtonText: "Aceptar", customClass: { confirmButton: "btn btn-primary" } });
+                Swal.fire({ 
+                    text: "🚫 Los domingos la sucursal Take Away se encuentra cerrada. Por favor, elige otra fecha/hora o The Gula House.", 
+                    icon: "warning", buttonsStyling: false, 
+                    confirmButtonText: "Aceptar", 
+                    customClass: { confirmButton: "btn btn-primary" } 
+                });
                 return false;
             }
+            // Validación de horario (8:00 a 20:00)
             if (hora < ABRIR_TAKE_AWAY || hora > CERRAR_TAKE_AWAY) {
-                 Swal.fire({ text: `🚫 Horario de retiro para Take Away debe ser entre ${ABRIR_TAKE_AWAY}:00 y ${CERRAR_TAKE_AWAY}:00 hs.`, icon: "warning", buttonsStyling: false, confirmButtonText: "Aceptar", customClass: { confirmButton: "btn btn-primary" } });
+                 Swal.fire({ 
+                     text: `🚫 Horario de retiro para Take Away debe ser entre ${ABRIR_TAKE_AWAY}:00 y ${CERRAR_TAKE_AWAY}:00 hs.`, 
+                     icon: "warning", buttonsStyling: false, 
+                     confirmButtonText: "Aceptar", 
+                     customClass: { confirmButton: "btn btn-primary" } 
+                 });
                 return false;
             }
         } else {
             // The Gula House: Todos los días (0-6), 8:00 a 21:00
+            // Validación de horario (8:00 a 21:00)
             if (hora < ABRIR_GULA || hora > CERRAR_GULA) {
-                Swal.fire({ text: `🚫 Horario de retiro para The Gula House debe ser entre ${ABRIR_GULA}:00 y ${CERRAR_GULA}:00 hs.`, icon: "warning", buttonsStyling: false, confirmButtonText: "Aceptar", customClass: { confirmButton: "btn btn-primary" } });
+                Swal.fire({ 
+                    text: `🚫 Horario de retiro para The Gula House debe ser entre ${ABRIR_GULA}:00 y ${CERRAR_GULA}:00 hs.`, 
+                    icon: "warning", buttonsStyling: false, 
+                    confirmButtonText: "Aceptar", 
+                    customClass: { confirmButton: "btn btn-primary" } 
+                });
                 return false;
             }
         }
         
-        // 2. Validación de 48 horas de anticipación
-        if (fechaHoraSeleccionada < fechaMinima) {
-            Swal.fire({ text: "🚫 Debes seleccionar una fecha y hora con al menos 48 horas de anticipación.", icon: "warning", buttonsStyling: false, confirmButtonText: "Aceptar", customClass: { confirmButton: "btn btn-primary" } });
-            return false;
-        }
-
-        // Si todas las validaciones pasan, habilitar el botón de confirmar
+        // Si todas las validaciones pasan, habilitar el botón
         submitButton.disabled = false;
         return true;
     }
 }
 
-// Función para guardar los datos del cliente
+// --- Funciones Auxiliares (Data Persistence y Resumen) ---
+
 function saveClientData() {
     localStorage.setItem("nombre", document.getElementById("nombre").value);
     localStorage.setItem("apellido", document.getElementById("apellido").value);
     localStorage.setItem("telefono", document.getElementById("telefono").value);
 }
 
-// Función para precargar los datos del cliente
 function loadClientData() {
     const nombreInput = document.getElementById("nombre");
     const apellidoInput = document.getElementById("apellido");
@@ -208,8 +228,6 @@ function loadClientData() {
     }
 }
 
-// Lógica de carrito y resumen (ajustada para usar productsData)
-
 function eliminarCarritoSiExpirado() {
     const carrito = JSON.parse(localStorage.getItem("cart")) || [];
     const horaCreacionCarrito = localStorage.getItem("horaCreacionCarrito");
@@ -223,11 +241,9 @@ function eliminarCarritoSiExpirado() {
             localStorage.removeItem("horaCreacionCarrito");
         }
     } else if (carrito.length > 0 && !horaCreacionCarrito) {
-        // Si hay carrito pero no hay hora, establecerla
         localStorage.setItem("horaCreacionCarrito", new Date().getTime().toString());
     }
 }
-
 
 function mostrarResumenPedido() {
     const cart = JSON.parse(localStorage.getItem("cart")) || [];
@@ -237,7 +253,7 @@ function mostrarResumenPedido() {
     const totalPedidoPanel = document.getElementById("total-pedido-panel");
     const totalPrice = document.getElementById("total-price");
 
-    if (!orderSummary || !orderSummaryMobile || !totalPedidoMobile || !totalPedidoPanel || !totalPrice) {
+    if (!orderSummary || !orderSummaryMobile || !totalPedidoMobile || !totalPedidoPanel || !totalPrice || productsData.length === 0) {
         return;
     }
 
@@ -250,12 +266,12 @@ function mostrarResumenPedido() {
         orderSummaryMobile.innerHTML = "<li>No hay productos en el carrito.</li>";
     } else {
         cart.forEach(item => {
-            // Busca el producto en los datos cargados globalmente
             const product = productsData.find(p => p.name === item.title);
 
             // Código para construir el list item (Escritorio)
             const listItem = document.createElement("li");
             listItem.className = "list-group-item";
+
             if (product && product.images && product.images.length > 0) {
                 const img = document.createElement("img");
                 img.src = product.images[0];
@@ -279,6 +295,7 @@ function mostrarResumenPedido() {
             // Código para construir el list item (Móvil)
             const listItemMobile = document.createElement("li");
             listItemMobile.className = "list-group-item";
+
             if (product && product.images && product.images.length > 0) {
                 const imgMobile = document.createElement("img");
                 imgMobile.src = product.images[0];
@@ -307,11 +324,6 @@ function mostrarResumenPedido() {
     totalPrice.textContent = total;
 }
 
-// El resto de la lógica para el botón desplegable en móvil (toggleOrderSummaryButton)
-// se mantiene igual.
-
-window.mostrarResumenPedido = mostrarResumenPedido; // Necesario para que el DOM lo vea
-
 // Lógica de toggle para móvil
 document.addEventListener("DOMContentLoaded", function () {
     const toggleOrderSummaryButton = document.getElementById("toggle-order-summary");
@@ -321,23 +333,20 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
     }
 
-    // Asegurar que el panel inicia oculto
     orderSummaryPanel.classList.remove("active");
-    orderSummaryPanel.style.display = "none"; 
+    orderSummaryPanel.style.display = "none";
 
     toggleOrderSummaryButton.addEventListener("click", function () {
         if (orderSummaryPanel.classList.contains("active")) {
             orderSummaryPanel.classList.remove("active");
-            orderSummaryPanel.style.display = "none"; 
+            orderSummaryPanel.style.display = "none";
         } else {
             orderSummaryPanel.classList.add("active");
-            orderSummaryPanel.style.display = "block"; 
+            orderSummaryPanel.style.display = "block";
+            mostrarResumenPedido();
         }
-
-        mostrarResumenPedido();
     });
-    
-    // Función de ajuste de pantalla para mostrar/ocultar el botón móvil
+
     function checkScreenSize() {
         if (window.innerWidth <= 767) {
             toggleOrderSummaryButton.style.display = "block";
@@ -348,3 +357,5 @@ document.addEventListener("DOMContentLoaded", function () {
     checkScreenSize();
     window.addEventListener("resize", checkScreenSize);
 });
+
+window.mostrarResumenPedido = mostrarResumenPedido;
