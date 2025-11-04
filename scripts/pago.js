@@ -1,13 +1,17 @@
 // Variable global para productos cargados de forma asíncrona
 let productsData = []; 
 
-// --- I. FUNCIONES AUXILIARES DE UTILIDAD (Deben ir primero) ---
+// --- I. FUNCIONES AUXILIARES DE UTILIDAD (Definición prioritaria) ---
 
 function saveClientData() {
     // Guarda los datos del cliente en localStorage
-    localStorage.setItem("nombre", document.getElementById("nombre").value);
-    localStorage.setItem("apellido", document.getElementById("apellido").value);
-    localStorage.setItem("telefono", document.getElementById("telefono").value);
+    const nombreInput = document.getElementById("nombre");
+    const apellidoInput = document.getElementById("apellido");
+    const telefonoInput = document.getElementById("telefono");
+    
+    if (nombreInput) localStorage.setItem("nombre", nombreInput.value);
+    if (apellidoInput) localStorage.setItem("apellido", apellidoInput.value);
+    if (telefonoInput) localStorage.setItem("telefono", telefonoInput.value);
 }
 
 function loadClientData() {
@@ -60,6 +64,7 @@ function mostrarResumenPedido() {
     const totalPedidoPanel = document.getElementById("total-pedido-panel");
     const totalPrice = document.getElementById("total-price");
 
+    // Verificar si los elementos del DOM y los datos están listos
     if (!orderSummary || !orderSummaryMobile || !totalPedidoMobile || !totalPedidoPanel || !totalPrice || productsData.length === 0) {
         return;
     }
@@ -75,7 +80,7 @@ function mostrarResumenPedido() {
         cart.forEach(item => {
             const product = productsData.find(p => p.name === item.title);
 
-            // Código para construir el list item (Escritorio y Móvil)
+            // Función para construir el list item
             const baseItem = (isMobile) => {
                 const li = document.createElement("li");
                 li.className = "list-group-item";
@@ -120,19 +125,19 @@ function validarRetiro() {
     if (!submitButton) return false;
 
     const sucursalSeleccionada = document.querySelector('input[name="pickup"]:checked');
-    const fechaSeleccionadaStr = fechaRetiroInput.value;
-    const horaSeleccionadaStr = horaRetiroInput.value;
+    const fechaRetiroValue = fechaRetiroInput.value;
+    const horaRetiroValue = horaRetiroInput.value;
     const fechaMinima = getMinPickupDate();
 
     // 0. Validación de campos obligatorios
-    if (!sucursalSeleccionada || !fechaSeleccionadaStr || !horaSeleccionadaStr) {
+    if (!sucursalSeleccionada || !fechaRetiroValue || !horaRetiroValue) {
         submitButton.disabled = true;
         return false;
     }
 
     const isTakeAway = sucursalSeleccionada.value === "sucursal1";
     const ABRIR = 8;
-    const CERRAR = isTakeAway ? 20 : 21; // Take Away cierra a las 20, Gula House a las 21
+    const CERRAR = isTakeAway ? 20 : 21; 
     const HORARIO_TEXTO = isTakeAway ? 'Lunes a Sábado de 8:00 a 20:00 hs.' : 'Lunes a Domingo de 8:00 a 21:00 hs.';
 
     // --- 1. VALIDACIÓN DE HORARIO ACTUAL (¿El local está abierto AHORA para recibir el pedido?) ---
@@ -149,7 +154,7 @@ function validarRetiro() {
     
     // a) Take Away cerrado los domingos (current day check)
     if (isTakeAway && currentDay === 0) {
-         Swal.fire({ 
+        Swal.fire({ 
             title: '¡Local Cerrado! 🚫',
             text: `La sucursal Take Away está cerrada hoy (Domingo). No podemos procesar pedidos ahora. Nuestro horario es: ${HORARIO_TEXTO}`, 
             icon: "error", buttonsStyling: false, 
@@ -176,7 +181,7 @@ function validarRetiro() {
     // --- 2. VALIDACIÓN DE FECHA Y HORA DE RETIRO (Reglas de negocio 48h y horario de sucursal) ---
 
     // Crear objeto Date de la hora de retiro seleccionada (UTC-3)
-    const fechaHoraSeleccionada = new Date(`${fechaSeleccionadaStr}T${horaSeleccionadaStr}:00-03:00`); 
+    const fechaHoraSeleccionada = new Date(`${fechaRetiroValue}T${horaRetiroValue}:00-03:00`); 
     const diaSemanaRetiro = fechaHoraSeleccionada.getDay(); // 0 = domingo, 1 = lunes
     const horaRetiro = fechaHoraSeleccionada.getHours();
     const minutosRetiro = fechaHoraSeleccionada.getMinutes();
@@ -210,7 +215,7 @@ function validarRetiro() {
     // c) Validación de HORARIO de Retiro (Precisa al minuto)
     if (retiroTimeInMinutes < openingTimeInMinutes) {
         Swal.fire({ 
-            text: `🚫 La hora seleccionada (${horaSeleccionadaStr}) es antes de la apertura. ${isTakeAway ? 'Take Away' : 'The Gula House'} abre a las ${ABRIR}:00 hs.`, 
+            text: `🚫 La hora seleccionada (${horaRetiroValue}) es antes de la apertura. ${isTakeAway ? 'Take Away' : 'The Gula House'} abre a las ${ABRIR}:00 hs.`, 
             icon: "warning", buttonsStyling: false, 
             confirmButtonText: "Aceptar", 
             customClass: { confirmButton: "btn btn-primary" } 
@@ -220,8 +225,8 @@ function validarRetiro() {
     }
 
     if (retiroTimeInMinutes > closingTimeInMinutes) {
-         Swal.fire({ 
-            text: `🚫 La hora seleccionada (${horaSeleccionadaStr}) es posterior al cierre. ${isTakeAway ? 'Take Away' : 'The Gula House'} cierra a las ${CERRAR}:00 hs.`, 
+        Swal.fire({ 
+            text: `🚫 La hora seleccionada (${horaRetiroValue}) es posterior al cierre. ${isTakeAway ? 'Take Away' : 'The Gula House'} cierra a las ${CERRAR}:00 hs.`, 
             icon: "warning", buttonsStyling: false, 
             confirmButtonText: "Aceptar", 
             customClass: { confirmButton: "btn btn-primary" } 
@@ -252,7 +257,7 @@ function initializePageLogic() {
     // 1. Ejecutar funciones auxiliares
     loadClientData();
     eliminarCarritoSiExpirado();
-    mostrarResumenPedido();
+    mostrarResumenPedido(); // Este es el que ahora debería funcionar
     
     // 2. Establecer el mínimo del input date.
     const fechaMinima = getMinPickupDate();
