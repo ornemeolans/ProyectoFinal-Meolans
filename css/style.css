@@ -145,18 +145,15 @@ navbar-nav {
         margin: 10px 10px;
     }
 
-    /* Asegurar que la cuadrícula mantiene las tarjetas alineadas */
+    /* INICIO DE MODIFICACIONES PARA RESPONSIVE EN TIENDA */
     .grid {
         display: grid;
-        grid-template-areas: "card-1 card-2 card-3 card-4"
-            "card-5 card-6 card-7 card-8"
-            "card-9 card-10 card-11 card-12"
-            "card-13 card-14 card-15 card-16"
-            "card-17 card-18 card-19 card-20"
-            "card-21 card-22 card-23 card-24";
+        grid-template-columns: repeat(4, 1fr); /* Establece 4 columnas fijas */
+        gap: 20px;
+        padding: 20px;
     }
 
-    /* Hacer que todas las tarjetas tengan el mismo tamaño */
+    /* Hacer que todas las tarjetas ocupen el espacio completo de su celda */
     .card-1,
     .card-2,
     .card-3,
@@ -182,15 +179,17 @@ navbar-nav {
     .card-23 {
         display: flex;
         flex-direction: column;
-        margin: 0px auto;
+        margin: 0px; /* Se elimina el 'auto' para que el grid se encargue del espacio */
         background-color: #e499ba;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         border-radius: 15px;
         overflow: hidden;
-        max-width: 80%;
-        height: 100%;
+        max-width: 100%; /* Ocupa el 100% de la columna */
+        width: 100%; /* Asegura que la tarjeta llena el espacio */
+        height: 100%; 
         /* Hace que todas las tarjetas sean del mismo tamaño */
     }
+    /* FIN DE MODIFICACIONES PARA RESPONSIVE EN TIENDA */
 
     /* Ajustar el tamaño del cuerpo de la tarjeta */
     .card-body {
@@ -684,20 +683,15 @@ navbar-nav {
         margin: 10px 10px;
     }
 
-    /* Asegurar que la cuadrícula mantiene las tarjetas alineadas */
+    /* INICIO DE MODIFICACIONES PARA RESPONSIVE EN TIENDA */
     .grid {
         display: grid;
-        grid-template-areas: "card-1 card-2 card-3"
-            "card-4 card-5 card-6"
-            "card-7 card-8 card-9"
-            "card-10 card-11 card-12"
-            "card-13 card-14 card-15"
-            "card-16 card-17 card-18"
-            "card-19 card-20 card-21"
-            "card-22 card-23 card-24";
+        grid-template-columns: repeat(3, 1fr); /* Establece 3 columnas fijas */
+        gap: 15px;
+        padding: 15px;
     }
 
-    /* Hacer que todas las tarjetas tengan el mismo tamaño */
+    /* Hacer que todas las tarjetas ocupen el espacio completo de su celda */
     .card-1,
     .card-2,
     .card-3,
@@ -723,15 +717,18 @@ navbar-nav {
     .card-23 {
         display: flex;
         flex-direction: column;
-        margin: 0px auto;
+        margin: 0px; /* Se elimina el 'auto' para que el grid se encargue del espacio */
         background-color: #e499ba;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         border-radius: 15px;
         overflow: hidden;
-        max-width: 80%;
+        max-width: 100%; /* Ocupa el 100% de la columna */
+        width: 100%; /* Asegura que la tarjeta llena el espacio */
         height: 100%;
         /* Hace que todas las tarjetas sean del mismo tamaño */
     }
+    /* FIN DE MODIFICACIONES PARA RESPONSIVE EN TIENDA */
+
 
     /* Ajustar el tamaño del cuerpo de la tarjeta */
     .card-body {
@@ -1228,24 +1225,15 @@ navbar-nav {
         margin: 10px 10px;
     }
 
-    /* Asegurar que la cuadrícula mantiene las tarjetas alineadas */
+    /* INICIO DE MODIFICACIONES PARA RESPONSIVE EN TIENDA */
     .grid {
         display: grid;
-        grid-template-areas: "card-1 card-2"
-            "card-3 card-4"
-            "card-5 card-6"
-            "card-7 card-8"
-            "card-9 card-10"
-            "card-11 card-12"
-            "card-13 card-14"
-            "card-15 card-16"
-            "card-17 card-18"
-            "card-19 card-20"
-            "card-21 card-22"
-            "card-23 card-24";
+        grid-template-columns: repeat(2, 1fr); /* Establece 2 columnas fijas */
+        gap: 10px;
+        padding: 10px;
     }
 
-    /* Hacer que todas las tarjetas tengan el mismo tamaño */
+    /* Hacer que todas las tarjetas ocupen el espacio completo de su celda */
     .card-1,
     .card-2,
     .card-3,
@@ -1271,15 +1259,17 @@ navbar-nav {
     .card-23 {
         display: flex;
         flex-direction: column;
-        margin: 0px auto;
+        margin: 0px; /* Se elimina el 'auto' para que el grid se encargue del espacio */
         background-color: #e499ba;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         border-radius: 15px;
         overflow: hidden;
-        max-width: 80%;
+        max-width: 100%; /* Ocupa el 100% de la columna */
+        width: 100%; /* Asegura que la tarjeta llena el espacio */
         height: 100%;
         /* Hace que todas las tarjetas sean del mismo tamaño */
     }
+    /* FIN DE MODIFICACIONES PARA RESPONSIVE EN TIENDA */
 
     /* Ajustar el tamaño del cuerpo de la tarjeta */
     .card-body {

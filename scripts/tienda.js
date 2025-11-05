@@ -99,7 +99,7 @@ function generateProducts(products) {
         ` : '';
 
         const productHTML = `
-            <div class="card-${index + 1}" style="grid-area: card-${index + 1};">
+            <div class="card-${index + 1}">
                 <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
                     <div class="carousel-inner">
                         ${imagesHTML}
